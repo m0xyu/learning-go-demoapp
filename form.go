@@ -42,7 +42,7 @@ func (f *Form) Required(fields ...string) *Form {
 		//キーに関連付けられた最初の値を取得
 		value := f.Get(field)
 		if strings.TrimSpace(value) == "" {
-			f.Errors.Add(field, fmt.Sprintf("This field %s is reqired", field))
+			f.Errors.Add(field, fmt.Sprintf("This field %s is required", field))
 		}
 	}
 	return f
