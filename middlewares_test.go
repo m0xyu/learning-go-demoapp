@@ -132,6 +132,54 @@ func TestAuthenticate_ValidSession(t *testing.T) {
 	assert.Equal(t, "OK", w2.Body.String())
 }
 
+func TestAuthenticate_RemoveSession(t *testing.T) {
+	defer cleanupTestData(t)
+	user, err := testApp.userRepo.CreateUser(
+		"session user",
+		"session@test.com",
+		"passwordgood",
+		"avatar",
+	)
+	assert.NoError(t, err)
+	assert.Greater(t, user, 0)
+
+	// セッションにユーザー情報をセットするためのハンドラー
+	setupHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testApp.session.Put(r, loggedInUserKey, "non-existent@test.com")
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// 認証後のハンドラー
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.False(t, testApp.isAuthenticated(r))
+		user := r.Context().Value(contextUserKey)
+		assert.Nil(t, user)
+		assert.Equal(t, "", testApp.session.GetString(r, loggedInUserKey))
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// セッションをセットするためのリクエスト
+	setUpChain := testApp.session.Enable(testApp.authenticate(setupHandler))
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w1 := httptest.NewRecorder()
+	setUpChain.ServeHTTP(w1, req1)
+
+	// 認証後のリクエスト（セッションを引き継ぐ）
+	testChain := testApp.session.Enable(testApp.authenticate(testHandler))
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	if cookies := w1.Result().Cookies(); len(cookies) > 0 {
+		for _, cookie := range cookies {
+			req2.AddCookie(cookie)
+		}
+	}
+
+	w2 := httptest.NewRecorder()
+	testChain.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Equal(t, "OK", w2.Body.String())
+}
+
 func contextWithAuth(ctx context.Context, isAuth interface{}) context.Context {
 	return context.WithValue(ctx, contextAuthKey, isAuth)
 }
