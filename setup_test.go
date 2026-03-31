@@ -3,13 +3,18 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/golangcollege/sessions"
 	"github.com/stretchr/testify/assert"
 )
 
 var testDB *sql.DB
+var testApp *application
 
 func TestMain(m *testing.M) {
 	fmt.Println("Starting tests...")
@@ -21,6 +26,8 @@ func TestMain(m *testing.M) {
 	if err := testDB.Ping(); err != nil {
 		panic(err)
 	}
+
+	testApp = setupApp(testDB)
 	if err = setUpTestShema(testDB); err != nil {
 		panic(err)
 	}
@@ -29,6 +36,22 @@ func TestMain(m *testing.M) {
 	testDB.Close()
 	fmt.Println("Finished tests...")
 	os.Exit(code)
+}
+
+func setupApp(db *sql.DB) *application {
+	session := sessions.New([]byte("test-secret-key"))
+	session.Lifetime = 24 * time.Hour
+
+	return &application{
+		errorLog:    log.New(io.Discard, "", 0),
+		infoLog:     log.New(io.Discard, "", 0),
+		userRepo:    NewSQLUserRepository(db),
+		postRepo:    NewSQLPostRepository(db),
+		templateDir: "./templates",
+		publicPath:  "./public",
+		session:     session,
+	}
+
 }
 
 func setUpTestShema(db *sql.DB) error {
@@ -77,14 +100,16 @@ CREATE TABLE votes (
 }
 
 func cleanupTestData(t *testing.T) {
-	_, err := testDB.Exec("DELETE FROM profile")
-	assert.NoError(t, err)
-	_, err = testDB.Exec("DELETE FROM users")
-	assert.NoError(t, err)
-	_, err = testDB.Exec("DELETE FROM posts")
-	assert.NoError(t, err)
-	_, err = testDB.Exec("DELETE FROM comments")
-	assert.NoError(t, err)
-	_, err = testDB.Exec("DELETE FROM votes")
-	assert.NoError(t, err)
+	tables := []string{
+		"profile",
+		"users",
+		"posts",
+		"comments",
+		"votes",
+	}
+
+	for _, table := range tables {
+		_, err := testDB.Exec(fmt.Sprintf("DELETE FROM %s", table))
+		assert.NoError(t, err)
+	}
 }

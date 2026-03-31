@@ -52,7 +52,7 @@ func TestSQLUserRepository_CreateUser_DuplicateEmail(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Greater(t, userID, 0)
 
-	userID, err = repo.CreateUser(
+	_, err = repo.CreateUser(
 		"John Doe",
 		"john@doe.com",
 		generateString(73),
